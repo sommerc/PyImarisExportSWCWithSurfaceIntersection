@@ -47,9 +47,6 @@ def exceptionPrinter(do_stuff):
     return tmp
 
 
-DBG_WRITE_TABS = False
-
-
 def getImaris(aImarisId):
     # Create an ImarisLib object
     vImarisLib = ImarisLib.ImarisLib()
@@ -169,6 +166,53 @@ def askForSurfacesToProcess(Scene, Imaris):
     return {k[0]: k[1] for k, v in vars.items() if v.get() > 0}
 
 
+def getSurfaceLabelImage(surface, ds):
+    nSurfaces = len(surface.GetIds())
+
+    label_img = np.zeros((ds.GetSizeX(), ds.GetSizeY(), ds.GetSizeZ()), np.uint16)
+
+    voxel_len_x = (ds.GetExtendMaxX() - ds.GetExtendMinX()) / ds.GetSizeX()
+    voxel_len_y = (ds.GetExtendMaxY() - ds.GetExtendMinY()) / ds.GetSizeY()
+    voxel_len_z = (ds.GetExtendMaxZ() - ds.GetExtendMinZ()) / ds.GetSizeZ()
+
+    for i in trange(nSurfaces):
+        sl = surface.GetSurfaceDataLayout(i)
+
+        block_start_x = int((sl.mExtendMinX - ds.GetExtendMinX()) / voxel_len_x)
+        block_end_x = int((sl.mExtendMaxX - ds.GetExtendMinX()) / voxel_len_x + 1)
+
+        block_start_y = int((sl.mExtendMinY - ds.GetExtendMinY()) / voxel_len_y)
+        block_end_y = int((sl.mExtendMaxY - ds.GetExtendMinY()) / voxel_len_y + 1)
+
+        block_start_z = int((sl.mExtendMinZ - ds.GetExtendMinZ()) / voxel_len_z)
+        block_end_z = int((sl.mExtendMaxZ - ds.GetExtendMinZ()) / voxel_len_z + 1)
+
+        simgle_mask = surface.GetSingleMask(
+            i,
+            sl.mExtendMinX,
+            sl.mExtendMinY,
+            sl.mExtendMinZ,
+            sl.mExtendMaxX,
+            sl.mExtendMaxY,
+            sl.mExtendMaxZ,
+            block_end_x - block_start_x,
+            block_end_y - block_start_y,
+            block_end_z - block_start_z,
+        )
+        arr_single_mask = np.array(simgle_mask.GetDataShorts(), dtype=bool)[0, 0]
+
+        block = label_img[
+            block_start_x:block_end_x,
+            block_start_y:block_end_y,
+            block_start_z:block_end_z,
+        ]
+
+        # binary indexing here to set label id
+        block[arr_single_mask] = i + 1
+
+    return label_img
+
+
 def exportLabelImageFeatures(Imaris, DataSet, Scene, surface_dict, filename_base):
     label_img_dict = {}
     for surface_name, si in surface_dict.items():
@@ -176,24 +220,23 @@ def exportLabelImageFeatures(Imaris, DataSet, Scene, surface_dict, filename_base
         surface = Imaris.GetFactory().ToSurfaces(Scene.GetChild(si))
 
         # mask = getSurfaceLabelImage(surface, V, scale=1)
-        mask = getMaskLabelImage(surface, DataSet).astype(np.uint16)
-        label_img_dict[surface_name] = mask
+        label_img = getSurfaceLabelImage(surface, DataSet)
+        label_img_dict[surface_name] = label_img
 
-        if DBG_WRITE_TABS:
-            rp = measure.regionprops_table(
-                mask,
-                properties=(
-                    "label",
-                    "area",
-                    "centroid",
-                    # "inertia_tensor_eigvals",
-                    # "equivalent_diameter_area",
-                    # "feret_diameter_max"
-                ),
-            )
+        rp = measure.regionprops_table(
+            label_img,
+            properties=(
+                "label",
+                "area",
+                "centroid",
+                # "inertia_tensor_eigvals",
+                # "equivalent_diameter_area",
+                # "feret_diameter_max"
+            ),
+        )
 
-            rp_tab = pd.DataFrame(rp)
-            rp_tab.to_csv(f"{filename_base}_{surface_name}.tab", sep="\t", index=False)
+        rp_tab = pd.DataFrame(rp)
+        rp_tab.to_csv(f"{filename_base}_{surface_name}.tab", sep="\t", index=False)
 
     return label_img_dict
 
