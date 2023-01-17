@@ -24,4 +24,5 @@ The .extended.swc contains extra columns for each surface linking to label IDs. 
 
 
 ## Ackknowedgement
-SWC export code is adapted from [PyImarisSWC](https://imaris.oxinst.com/open/view/pyimarisswc) by Sarun Gulyanon
+* SWC export code is adapted from [PyImarisSWC](https://imaris.oxinst.com/open/view/pyimarisswc) by Sarun Gulyanon
+* Discussion at [image.sc](https://forum.image.sc/t/measure-which-objects-colocalise-in-imarisxt/51699/17)
