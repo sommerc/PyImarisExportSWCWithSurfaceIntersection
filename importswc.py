@@ -4,7 +4,7 @@
 #
 # <CustomTools>
 #  <Menu>
-#    <Item name="Import SWC as FilamentSSSS" icon="Python3">
+#    <Item name="Import SWCs as Filaments" icon="Python3">
 #      <Command>Python3XT::ImportSWC(#i)</Command>
 #    </Item>
 #  </Menu>
