@@ -132,6 +132,8 @@ def askForSurfacesToProcess(Scene, Imaris):
     vars = {}
     surface_indeces = GetSufaceIndices(Scene, Imaris)
 
+    tk.Label(root,text="Export Filament to SWC:\nExport Filament-Surface intersection", anchor="w").grid(row=0, column=0, columnspan=3, sticky='w')
+
     for i, si in enumerate(surface_indeces):
         child = Scene.GetChild(si)
         surface_name = child.GetName()
@@ -141,7 +143,7 @@ def askForSurfacesToProcess(Scene, Imaris):
             text=child.GetName(),
             variable=vars[(surface_name, si)],
         )
-        cb.grid(row=0, column=i)
+        cb.grid(row=1, column=i)
         if surface_name.lower()[:4] in ["mito", "cd68"]:
             cb.select()
 
@@ -149,13 +151,13 @@ def askForSurfacesToProcess(Scene, Imaris):
         root,
         text="Run",
         command=lambda: runit.run(True),
-    ).grid(row=1, column=1)
+    ).grid(row=2, column=1)
 
     tk.Button(
         root,
         text="Close",
         command=lambda: runit.run(False),
-    ).grid(row=1, column=0)
+    ).grid(row=2, column=0)
 
     root.mainloop()
 
