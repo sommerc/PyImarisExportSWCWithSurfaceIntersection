@@ -329,19 +329,21 @@ def exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base):
                 last_cur.append(cur)
         head = head + 1
 
-    for k, v in db_out_dict.items():
-        print(k)
-        tifffile.imsave(
-            f"{filename_base}_{k}_db.tif", v[:, None].swapaxes(0, 3), imagej=True
-        )
+    if False:
+        for k, v in db_out_dict.items():
+            print(k)
+            tifffile.imsave(
+                f"{filename_base}_{k}_db.tif", v[:, None].swapaxes(0, 3), imagej=True
+            )
 
     swc_tab = pd.DataFrame(
         swc,
         columns=["SampleID", "TypeID", "x", "y", "z", "r", "ParentID"]
         + [f"{sn}_labels" for sn in label_img_dict.keys()],
     )
+    print("Export to " + savename, end='... ')
     swc_tab.to_csv(savename, sep=" ", index=False)
-    print("Export to " + savename + " completed")
+    print("done")
 
 
 @exceptionPrinter
@@ -357,7 +359,7 @@ def main(aImarisId):
         return
 
     # Get user selected Surfaces
-    print(surface_dict)
+    #print(surface_dict)
 
     filename_base = Imaris.GetCurrentFileName()[:-4]
 
