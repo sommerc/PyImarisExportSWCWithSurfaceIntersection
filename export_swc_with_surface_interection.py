@@ -56,12 +56,14 @@ def getImaris(aImarisId):
 
     # Check if the object is valid
     if vImaris is None:
+        tk.Tk().withdraw()
         messagebox.showwarning("Could not connect to Imaris!")
         raise RuntimeError("Could not connect to Imaris!")
 
     # Get the dataset
     vDataSet = vImaris.GetDataSet()
     if vDataSet is None:
+        tk.Tk().withdraw()
         messagebox.showwarning("An image must be loaded to run this XTension!")
         RuntimeError("An image must be loaded to run this XTension!")
 
@@ -132,7 +134,11 @@ def askForSurfacesToProcess(Scene, Imaris):
     vars = {}
     surface_indeces = GetSufaceIndices(Scene, Imaris)
 
-    tk.Label(root,text="Export Filament to SWC:\nExport Filament-Surface intersection", anchor="w").grid(row=0, column=0, columnspan=3, sticky='w')
+    tk.Label(
+        root,
+        text="Export Filament to SWC:\nExport Filament-Surface intersection",
+        anchor="w",
+    ).grid(row=0, column=0, columnspan=3, sticky="w")
 
     for i, si in enumerate(surface_indeces):
         child = Scene.GetChild(si)
@@ -215,7 +221,7 @@ def getSurfaceLabelImage(surface, ds):
     return label_img
 
 
-def exportLabelImageFeatures(Imaris, DataSet, Scene, surface_dict, filename_base):
+def getLabelImages(Imaris, DataSet, Scene, surface_dict):
     label_img_dict = {}
     for surface_name, si in surface_dict.items():
         print(f"{surface_name}: exporting surface label img table...")
@@ -225,6 +231,11 @@ def exportLabelImageFeatures(Imaris, DataSet, Scene, surface_dict, filename_base
         label_img = getSurfaceLabelImage(surface, DataSet)
         label_img_dict[surface_name] = label_img
 
+    return label_img_dict
+
+
+def exportLabelImageFeatures(label_img_dict, filename_base, soma_pos, pixel_size):
+    for surface_name, label_img in label_img_dict.items():
         rp = measure.regionprops_table(
             label_img,
             properties=(
@@ -238,26 +249,41 @@ def exportLabelImageFeatures(Imaris, DataSet, Scene, surface_dict, filename_base
         )
 
         rp_tab = pd.DataFrame(rp)
+
+        rp_tab["area"] = rp_tab["area"] * np.prod(pixel_size)
+        rename_map = {"area": "volume_um"}
+
+        for d in range(3):
+            rp_tab[f"centroid-{d}"] = rp_tab[f"centroid-{d}"] * pixel_size[d]
+            rename_map[f"centroid-{d}"] = f"centroid-{'xyz'[d]}_um"
+        rp_tab.rename(columns=rename_map, inplace=True)
+
+        xyz = rp_tab[[f"centroid-{'xyz'[d]}_um" for d in range(3)]].to_numpy()
+        rp_tab["distance_to_soma_um"] = np.linalg.norm(xyz - soma_pos, axis=1)
+
         rp_tab.to_csv(f"{filename_base}_{surface_name}.tab", sep="\t", index=False)
 
-    return label_img_dict
+
+def getPixelSize(DataSet):
+    pixel_size = np.array(
+        [
+            ((DataSet.GetExtendMaxX() - DataSet.GetExtendMinX()) / DataSet.GetSizeX()),
+            ((DataSet.GetExtendMaxY() - DataSet.GetExtendMinY()) / DataSet.GetSizeY()),
+            ((DataSet.GetExtendMaxZ() - DataSet.GetExtendMinZ()) / DataSet.GetSizeZ()),
+        ]
+    )
+    return pixel_size
 
 
-def exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base):
+def exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base, db_create_tif=False):
     savename = f"{filename_base}.extended.swc"
     n_surfaces = len(label_img_dict)
 
     extent = getExtent(DataSet)
     Filament = Imaris.GetFactory().ToFilaments(getFilament(Scene))
 
-    pixel_scale = np.array(
-        [
-            (DataSet.GetSizeX()) / (DataSet.GetExtendMaxX() - DataSet.GetExtendMinX()),
-            (DataSet.GetSizeY()) / (DataSet.GetExtendMaxY() - DataSet.GetExtendMinY()),
-            (DataSet.GetSizeZ()) / (DataSet.GetExtendMaxZ() - DataSet.GetExtendMinZ()),
-        ]
-    )
-    pixel_offset = np.array(extent[:3])
+    pixel_per_um = 1 / getPixelSize(DataSet)
+    origin_offset = np.array(extent[:3])
 
     # go through Filaments and convert to SWC format
     head = 0
@@ -302,15 +328,17 @@ def exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base):
             filamentRadius[cur],
             prev,
         ] + [-1] * n_surfaces
-        pos = filamentXYZ[cur] - pixel_offset
-        swc[head, 2:5] = pos * pixel_scale
+        pos = filamentXYZ[cur] - origin_offset
+        swc[head, 2:5] = pos
 
         # write labels of masks overlapping with edge
         if l_cur >= 0:
-            src_px = ((filamentXYZ[l_cur] - pixel_offset) * pixel_scale).astype(
+            src_px = ((filamentXYZ[l_cur] - origin_offset) * pixel_per_um).astype(
                 np.int32
             )
-            des_px = ((filamentXYZ[cur] - pixel_offset) * pixel_scale).astype(np.int32)
+            des_px = ((filamentXYZ[cur] - origin_offset) * pixel_per_um).astype(
+                np.int32
+            )
 
             ll = line_nd(src_px, des_px, endpoint=True)
 
@@ -331,7 +359,7 @@ def exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base):
                 last_cur.append(cur)
         head = head + 1
 
-    if False:
+    if db_create_tif:
         for k, v in db_out_dict.items():
             print(k)
             tifffile.imsave(
@@ -343,9 +371,14 @@ def exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base):
         columns=["SampleID", "TypeID", "x", "y", "z", "r", "ParentID"]
         + [f"{sn}_labels" for sn in label_img_dict.keys()],
     )
-    print("Export to " + savename, end='... ')
+    print("Export to " + savename, end="... ")
     swc_tab.to_csv(savename, sep=" ", index=False)
     print("done")
+
+    soma_idx = Filament.GetBeginningVertexIndex(vFilamentIndex)
+    soma_pos = filamentXYZ[soma_idx] - origin_offset
+
+    return soma_pos
 
 
 @exceptionPrinter
@@ -353,22 +386,28 @@ def main(aImarisId):
     # Create an ImarisLib object
     Imaris, DataSet, Scene = getImaris(aImarisId)
 
-    # User Dialog to select surfaces
+    # Get output filename prefix
+    filename_base = Imaris.GetCurrentFileName()[:-4]
 
+    # User Dialog to select surfaces
     surface_dict = askForSurfacesToProcess(Scene, Imaris)
 
     if len(surface_dict) == 0:
-        return
+        tk.Tk().withdraw()
+
+        messagebox.showwarning(
+            "Warning",
+            "No Surface selected.\nExporting SWC without Surface Intersections",
+        )
 
     # Get user selected Surfaces
-    #print(surface_dict)
+    # print(surface_dict)
 
-    filename_base = Imaris.GetCurrentFileName()[:-4]
+    label_img_dict = getLabelImages(Imaris, DataSet, Scene, surface_dict)
 
-    label_img_dict = exportLabelImageFeatures(
-        Imaris, DataSet, Scene, surface_dict, filename_base
-    )
+    soma_pos = exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base)
 
-    exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base)
+    pixel_size = getPixelSize(DataSet)
+    exportLabelImageFeatures(label_img_dict, filename_base, soma_pos, pixel_size)
 
     input("Done: press Return to close!")
