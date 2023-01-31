@@ -1,26 +1,57 @@
 # Export Filament
 # By Sarun Gulyanon 28 July 2018
+# Adapted by Christoph Sommer 31 Jannuary 2022
 #
 # <CustomTools>
 #  <Menu>
-#    <Item name="Export Filament as SWC" icon="Python">
-#      <Command>PythonXT::ExportSWC(#i)</Command>
-#    </Item>
+#    <Submenu name="SWC">
+#       <Item name="Export Filament as SWC (micron)" icon="Python3">
+#           <Command>Python3XT::ExportSWC_um(#i)</Command>
+#       </Item>
+#       <Item name="Export Filament as SWC (pixel)" icon="Python3">
+#           <Command>Python3XT::ExportSWC_px(#i)</Command>
+#       </Item>
+#     </Submenu>
 #  </Menu>
 # </CustomTools>
-print("asdf")
+
+import traceback
+
 try:
     import ImarisLib
-    import tkinter
-    from tkinter import filedialog
+    import tkinter as tk
+    from tkinter import messagebox
+
+    from tkinter.filedialog import asksaveasfilename
     import numpy as np
     import time
+
 except:
+    print(traceback.format_exc())
     input()
 
 
-def ExportSWC(aImarisId):
-    input()
+def exceptionPrinter(do_stuff):
+    def tmp(*args, **kwargs):
+        try:
+            do_stuff(*args, **kwargs)
+        except Exception:
+            print(traceback.format_exc())
+            input("Error: hit Return to close...")
+
+    return tmp
+
+
+def ExportSWC_um(aImarisId):
+    ExportSWC(aImarisId, False)
+
+
+def ExportSWC_px(aImarisId):
+    ExportSWC(aImarisId, True)
+
+
+@exceptionPrinter
+def ExportSWC(aImarisId, in_pixel):
     # Create an ImarisLib object
     vImarisLib = ImarisLib.ImarisLib()
     # Get an imaris object with id aImarisId
@@ -57,9 +88,9 @@ def ExportSWC(aImarisId):
         pixel_scale[2] = -pixel_scale[2]
 
     # get filename
-    root = tkinter.Tk()
+    root = tk.Tk()
     root.withdraw()
-    savename = filedialog.asksaveasfilename(defaultextension=".swc")
+    savename = asksaveasfilename(defaultextension=".swc")
     root.destroy()
     if not savename:  # asksaveasfilename return '' if dialog closed with "cancel".
         print("No files selected")
@@ -103,8 +134,10 @@ def ExportSWC(aImarisId):
                 vFilamentsRadius[cur],
                 prev,
             ]
-            pos = vFilamentsXYZ[cur] - pixel_offset
-            swc[head, 2:5] = pos * pixel_scale
+            swc[head, 2:5] = vFilamentsXYZ[cur] - pixel_offset
+            if in_pixel:
+                swc[head, 2:5] *= pixel_scale
+
             for idx in np.where(G[cur])[0]:
                 if not visited[idx]:
                     visited[idx] = True

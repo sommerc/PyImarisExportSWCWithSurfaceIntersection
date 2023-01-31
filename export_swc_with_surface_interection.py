@@ -5,9 +5,11 @@
 #
 #    <CustomTools>
 #      <Menu>
-#       <Item name="Export filament as SWC with Surface Interection" icon="Python3" tooltip="Export SWC with Surface Interection">
-#         <Command>Python3XT::main(%i)</Command>
-#       </Item>
+#       <Submenu name="SWC">
+#          <Item name="Export Filament as SWC with Surface Interection (micron)" icon="Python3" tooltip="Export SWC with Surface Interection (micron)">
+#            <Command>Python3XT::main(%i)</Command>
+#          </Item>
+#       </Submenu>
 #      </Menu>
 #    </CustomTools>
 
@@ -57,14 +59,14 @@ def getImaris(aImarisId):
     # Check if the object is valid
     if vImaris is None:
         tk.Tk().withdraw()
-        messagebox.showwarning("Could not connect to Imaris!")
+        messagebox.showwarning("Error", "Could not connect to Imaris!")
         raise RuntimeError("Could not connect to Imaris!")
 
     # Get the dataset
     vDataSet = vImaris.GetDataSet()
     if vDataSet is None:
         tk.Tk().withdraw()
-        messagebox.showwarning("An image must be loaded to run this XTension!")
+        messagebox.showwarning("Error", "An image must be loaded to run this XTension!")
         RuntimeError("An image must be loaded to run this XTension!")
 
     scene = vImaris.GetSurpassScene()
@@ -96,10 +98,23 @@ def getExtent(DataSet):
     ]
 
 
-def getFilament(Scene, prefix="Filament"):
+def getFilament(Imaris, Scene):
+    # Check selected
+    Filament = Imaris.GetFactory().ToFilaments(Imaris.GetSurpassSelection())
+    if Filament is not None:
+        return Filament
+
+    # If selected child is not Filament, take first Filament found
     for i in range(Scene.GetNumberOfChildren()):
-        if Scene.GetChild(i).GetName().startswith(prefix):
-            return Scene.GetChild(i)
+        Filament = Imaris.GetFactory().ToFilaments(Scene.GetChild(i))
+        if Filament is not None:
+            return Filament
+
+    tk.Tk().withdraw()
+    messagebox.showwarning(
+        "Error",
+        "No Filament found",
+    )
     raise RuntimeError("No Filament found")
 
 
@@ -275,12 +290,13 @@ def getPixelSize(DataSet):
     return pixel_size
 
 
-def exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base, db_create_tif=False):
+def exportExtendedSWC(
+    DataSet, Filament, label_img_dict, filename_base, db_create_tif=False
+):
     savename = f"{filename_base}.extended.swc"
     n_surfaces = len(label_img_dict)
 
     extent = getExtent(DataSet)
-    Filament = Imaris.GetFactory().ToFilaments(getFilament(Scene))
 
     pixel_per_um = 1 / getPixelSize(DataSet)
     origin_offset = np.array(extent[:3])
@@ -386,6 +402,8 @@ def main(aImarisId):
     # Create an ImarisLib object
     Imaris, DataSet, Scene = getImaris(aImarisId)
 
+    Filament = getFilament(Imaris, Scene)
+
     # Get output filename prefix
     filename_base = Imaris.GetCurrentFileName()[:-4]
 
@@ -405,7 +423,7 @@ def main(aImarisId):
 
     label_img_dict = getLabelImages(Imaris, DataSet, Scene, surface_dict)
 
-    soma_pos = exportExtendedSWC(Imaris, DataSet, Scene, label_img_dict, filename_base)
+    soma_pos = exportExtendedSWC(DataSet, Filament, label_img_dict, filename_base)
 
     pixel_size = getPixelSize(DataSet)
     exportLabelImageFeatures(label_img_dict, filename_base, soma_pos, pixel_size)

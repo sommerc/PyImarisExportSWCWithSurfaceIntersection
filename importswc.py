@@ -4,26 +4,54 @@
 #
 # <CustomTools>
 #  <Menu>
-#    <Item name="Import SWCs as Filaments" icon="Python3">
-#      <Command>Python3XT::ImportSWC(#i)</Command>
-#    </Item>
+#    <Submenu name="SWC">
+#       <Item name="Import SWCs as Filaments (micron)" icon="Python3">
+#           <Command>Python3XT::ImportSWC_um(#i)</Command>
+#       </Item>
+#       <Item name="Import SWCs as Filaments (pixel)" icon="Python3">
+#           <Command>Python3XT::ImportSWC_px(#i)</Command>
+#       </Item>
+#     </Submenu>
 #  </Menu>
 # </CustomTools>
 
 
+import traceback
 
 try:
     import ImarisLib
-    import tkinter
+    import tkinter as tk
+    from tkinter import messagebox
+    
     from tkinter.filedialog import askopenfilenames
     import numpy as np
     import time
     import traceback
 
 except:
+    print(traceback.format_exc())
     input()
+
+def exceptionPrinter(do_stuff):
+    def tmp(*args, **kwargs):
+        try:
+            do_stuff(*args, **kwargs)
+        except Exception:
+            print(traceback.format_exc())
+            input("Error: hit Return to close...")
+
+    return tmp
+
+
+def ImportSWC_um(aImarisId):
+    ImportSWC(aImarisId, False)
+
+
+def ImportSWC_px(aImarisId):
+    ImportSWC(aImarisId, True)
     
-def ImportSWC(aImarisId):
+@exceptionPrinter
+def ImportSWC(aImarisId, in_pixel):
     try:
         # Create an ImarisLib object    
         vImarisLib = ImarisLib.ImarisLib()
@@ -39,9 +67,9 @@ def ImportSWC(aImarisId):
         vFilaments = vFactory.ToFilaments(vImaris.GetSurpassSelection())
         
         # get swc file to load
-        root = tkinter.Tk()
+        root = tk.Tk()
         root.withdraw()
-        swcnames = askopenfilenames(title = "Select SWC file", filetypes = (("SWC files","*.swc"),("all files","*.*")))
+        swcnames = askopenfilenames(title = "Select SWC file(s)", filetypes = (("SWC files","*.swc"),("all files","*.*")))
         root.destroy()
         
         for swcname in swcnames:
@@ -49,7 +77,22 @@ def ImportSWC(aImarisId):
                 print('No file was selected.')
                 time.sleep(2)
                 return
-            swc = np.loadtxt(swcname)
+            try:
+                # standard SWC without header and 7 columns
+                swc = np.loadtxt(swcname)
+            except ValueError:
+                try:
+                    # own extended format. Ommit header and extra columns 
+                    swc = np.loadtxt(swcname, skiprows=1, usecols=range(7))
+                except:
+                    tk.Tk().withdraw()    
+                    messagebox.showwarning(
+                            "Error",
+                            "SWC format not understood...",
+                        )
+                    raise RuntimeError(f"SWC format of file '{swcname}' not understood...")
+                    
+
             
             # get pixel scale in XYZ resolution (pixel/um)
             V = vImaris.GetDataSet()
@@ -61,28 +104,34 @@ def ImportSWC(aImarisId):
             if abs(V.GetExtendMinZ()) > abs(V.GetExtendMaxZ()):
                 pixel_offset = np.array([V.GetExtendMinX(), V.GetExtendMinY(), V.GetExtendMaxZ()])
                 pixel_scale[2] = -pixel_scale[2]
+                print("???")
                 
             # draw Filament
             N = swc.shape[0]
-            vFilaments = vImaris.GetFactory().CreateFilaments();
-            vPositions = swc[:,2:5].astype(np.float) / pixel_scale
+            vFilaments = vImaris.GetFactory().CreateFilaments() 
+            pos = swc[:,2:5].astype(np.float)
+            if in_pixel:
+                pos/= pixel_scale
+            vPositions = pos
             vPositions = vPositions + pixel_offset
+            print(vPositions)
             vRadii     = swc[:,5].astype(np.float)
             vTypes     = swc[:,1] #(0: Dendrite; 1: Spine)
             vEdges     = swc[:,[6, 0]]
             idx        = np.all(vEdges > 0, axis=1)
             vEdges     = vEdges[idx,:] - 1
-            vTimeIndex = 0;
+            vTimeIndex = 0
             vFilaments.AddFilament(vPositions.tolist(), vRadii.tolist(), vTypes.tolist(), vEdges.tolist(), vTimeIndex)
-            vFilamentIndex = 0;
-            vVertexIndex = 1;
+            vFilamentIndex = 0
+            vVertexIndex = 1
             vFilaments.SetBeginningVertexIndex(vFilamentIndex, vVertexIndex)
             # Add the filament object to the scene
-            vScene = vImaris.GetSurpassScene();
+            vScene = vImaris.GetSurpassScene()
             vScene.AddChild(vFilaments, -1)
             print('Import ' + swcname + ' completed')
     except:
         print(traceback.format_exc())
+    finally:
         input()
     
         
