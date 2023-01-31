@@ -428,4 +428,5 @@ def main(aImarisId):
     pixel_size = getPixelSize(DataSet)
     exportLabelImageFeatures(label_img_dict, filename_base, soma_pos, pixel_size)
 
-    input("Done: press Return to close!")
+    tk.Tk().withdraw()
+    messagebox.showinfo("Success", "Extended SWC and Surfaces have been exported.")

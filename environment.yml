@@ -1,0 +1,10 @@
+name: imarisXTpy37
+dependencies:
+- python=3.7
+- pip
+- pip:
+  - numpy
+  - pandas
+  - tifffile
+  - tqdm
+  - scikit-image
