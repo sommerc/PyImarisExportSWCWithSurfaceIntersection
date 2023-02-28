@@ -31,6 +31,7 @@ try:
     import pandas as pd
     from skimage import measure, morphology
     from skimage.draw import line_nd
+    from skimage.transform import resize
     from tqdm.auto import tqdm, trange
 
 except:
@@ -210,6 +211,14 @@ def getSurfaceLabelImage(surface, ds):
         block_start_z = int((sl.mExtendMinZ - ds.GetExtendMinZ()) / voxel_len_z)
         block_end_z = int((sl.mExtendMaxZ - ds.GetExtendMinZ()) / voxel_len_z + 1)
 
+        block_start_x = max(0, block_start_x)
+        block_start_y = max(0, block_start_y)
+        block_start_z = max(0, block_start_z)
+
+        block_end_x = min(label_img.shape[0] - 1, block_end_x)
+        block_end_y = min(label_img.shape[1] - 1, block_end_y)
+        block_end_z = min(label_img.shape[2] - 1, block_end_z)
+
         simgle_mask = surface.GetSingleMask(
             i,
             sl.mExtendMinX,
@@ -231,6 +240,13 @@ def getSurfaceLabelImage(surface, ds):
         ]
 
         # binary indexing here to set label id
+        if block.shape != arr_single_mask.shape:
+            print(
+                f"Warning: shape mismatch block != mask :{block.shape} != {arr_single_mask.shape}. Trying resizing..."
+            )
+            arr_single_mask = resize(
+                arr_single_mask, output_shape=block.shape, order=0
+            ).astype(bool)
         block[arr_single_mask] = i + 1
 
     return label_img
@@ -359,7 +375,6 @@ def exportExtendedSWC(
             ll = line_nd(src_px, des_px, endpoint=True)
 
             for i, (surface_name, mask) in enumerate(label_img_dict.items()):
-
                 a = list(set(mask[ll]) - {0})
 
                 db_out_dict[surface_name][ll] = 100
