@@ -321,7 +321,18 @@ def exportExtendedSWC(
     head = 0
     vCount = Filament.GetNumberOfFilaments()
 
-    vFilamentIndex = 0
+    print("Filament count", vCount)
+
+    filament_counts = [len(Filament.GetPositionsXYZ(f)) for f in range(vCount)]
+    vFilamentIndex = np.argmax(filament_counts)
+
+    if len(filament_counts) > 0:
+        tk.Tk().withdraw()
+        messagebox.showinfo(
+            "Warning",
+            "More than 1 filaments found in Imaris Filament. \nUsing largest connected sub-filament",
+        )
+
     filamentXYZ = Filament.GetPositionsXYZ(vFilamentIndex)
     filamentEdges = Filament.GetEdges(vFilamentIndex)
     filamentRadius = Filament.GetRadii(vFilamentIndex)
