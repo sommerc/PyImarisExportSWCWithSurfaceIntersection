@@ -5,10 +5,10 @@
 # <CustomTools>
 #  <Menu>
 #    <Submenu name="SWC">
-#       <Item name="Export Filament as SWC (micron)" icon="Python3">
+#       <Item name="Export Filament as SWCs (micron)" icon="Python3">
 #           <Command>Python3XT::ExportSWC_um(#i)</Command>
 #       </Item>
-#       <Item name="Export Filament as SWC (pixel)" icon="Python3">
+#       <Item name="Export Filament as SWCs (pixel)" icon="Python3">
 #           <Command>Python3XT::ExportSWC_px(#i)</Command>
 #       </Item>
 #     </Submenu>
