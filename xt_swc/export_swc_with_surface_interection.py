@@ -321,8 +321,6 @@ def exportExtendedSWC(
     head = 0
     vCount = Filament.GetNumberOfFilaments()
 
-    print("Filament count", vCount)
-
     filament_counts = [len(Filament.GetPositionsXYZ(f)) for f in range(vCount)]
     vFilamentIndex = np.argmax(filament_counts)
 

@@ -65,9 +65,19 @@ def ExportSWC(aImarisId, in_pixel):
     vFactory = vImaris.GetFactory()
     vFilaments = vFactory.ToFilaments(vImaris.GetSurpassSelection())
 
-    if vFilaments is None:
-        print("Pick a filament first")
-        time.sleep(2)
+    ####
+    scene = vImaris.GetSurpassScene()
+
+    filemnt_objs = []
+    for ii in range(scene.GetNumberOfChildren()):
+        child = scene.GetChild(ii)
+        if vImaris.GetFactory().IsFilaments(child):
+            filemnt_objs.append(vFactory.ToFilaments(child))
+    ####
+
+    if len(filemnt_objs) == 0:
+        print("No filaments available in scene... aborting.")
+        time.sleep(4)
         return
 
     # get pixel scale in XYZ resolution (pixel/um)
@@ -87,64 +97,69 @@ def ExportSWC(aImarisId, in_pixel):
         )
         pixel_scale[2] = -pixel_scale[2]
 
-    # get filename
+    # get base filename
     root = tk.Tk()
     root.withdraw()
     savename = asksaveasfilename(defaultextension=".swc")
     root.destroy()
     if not savename:  # asksaveasfilename return '' if dialog closed with "cancel".
         print("No files selected")
-        time.sleep(2)
+        time.sleep(4)
         return
     print(savename)
 
-    # go through Filaments and convert to SWC format
-    head = 0
-    swcs = np.zeros((0, 7))
+    for k, vFilaments in enumerate(filemnt_objs):
+        # go through Filaments and convert to SWC format
+        head = 0
+        swcs = np.zeros((0, 7))
 
-    vCount = vFilaments.GetNumberOfFilaments()
-    for vFilamentIndex in range(vCount):
-        vFilamentsXYZ = vFilaments.GetPositionsXYZ(vFilamentIndex)
-        vFilamentsEdges = vFilaments.GetEdges(vFilamentIndex)
-        vFilamentsRadius = vFilaments.GetRadii(vFilamentIndex)
-        vFilamentsTypes = vFilaments.GetTypes(vFilamentIndex)
-        # vFilamentsTime = vFilaments.GetTimeIndex(vFilamentIndex)
+        vCount = vFilaments.GetNumberOfFilaments()
+        for vFilamentIndex in range(vCount):
+            vFilamentsXYZ = vFilaments.GetPositionsXYZ(vFilamentIndex)
+            vFilamentsEdges = vFilaments.GetEdges(vFilamentIndex)
+            vFilamentsRadius = vFilaments.GetRadii(vFilamentIndex)
+            vFilamentsTypes = vFilaments.GetTypes(vFilamentIndex)
+            # vFilamentsTime = vFilaments.GetTimeIndex(vFilamentIndex)
 
-        N = len(vFilamentsXYZ)
-        G = np.zeros((N, N), np.bool)
-        visited = np.zeros(N, np.bool)
-        for p1, p2 in vFilamentsEdges:
-            G[p1, p2] = True
-            G[p2, p1] = True
+            N = len(vFilamentsXYZ)
+            G = np.zeros((N, N), np.bool)
+            visited = np.zeros(N, np.bool)
+            for p1, p2 in vFilamentsEdges:
+                G[p1, p2] = True
+                G[p2, p1] = True
 
-        # traverse through the Filament using BFS
-        swc = np.zeros((N, 7))
-        visited[0] = True
-        queue = [0]
-        prevs = [-1]
-        while queue:
-            cur = queue.pop()
-            prev = prevs.pop()
-            swc[head] = [
-                head + 1,
-                vFilamentsTypes[cur],
-                0,
-                0,
-                0,
-                vFilamentsRadius[cur],
-                prev,
-            ]
-            swc[head, 2:5] = vFilamentsXYZ[cur] - pixel_offset
-            if in_pixel:
-                swc[head, 2:5] *= pixel_scale
+            # traverse through the Filament using BFS
+            swc = np.zeros((N, 7))
+            visited[0] = True
+            queue = [0]
+            prevs = [-1]
+            while queue:
+                cur = queue.pop()
+                prev = prevs.pop()
+                swc[head] = [
+                    head + 1,
+                    vFilamentsTypes[cur],
+                    0,
+                    0,
+                    0,
+                    vFilamentsRadius[cur],
+                    prev,
+                ]
+                swc[head, 2:5] = vFilamentsXYZ[cur] - pixel_offset
+                if in_pixel:
+                    swc[head, 2:5] *= pixel_scale
 
-            for idx in np.where(G[cur])[0]:
-                if not visited[idx]:
-                    visited[idx] = True
-                    queue.append(idx)
-                    prevs.append(head + 1)
-            head = head + 1
-        swcs = np.concatenate((swcs, swc), axis=0)
-    # write to file
-    np.savetxt(savename, swcs, "%d %d %f %f %f %f %d")
-    print("Export to " + savename + " completed")
+                for idx in np.where(G[cur])[0]:
+                    if not visited[idx]:
+                        visited[idx] = True
+                        queue.append(idx)
+                        prevs.append(head + 1)
+                head = head + 1
+            swcs = np.concatenate((swcs, swc), axis=0)
+        # write to file
+        fil_out = savename[:-4] + f"_filament{k:03d}.swc"
+        np.savetxt(fil_out, swcs, "%d %d %f %f %f %f %d")
+        print("Export to " + fil_out + " completed")
+
+    tk.Tk().withdraw()
+    messagebox.showinfo("Success", "SWCs have been successfully exported.")
