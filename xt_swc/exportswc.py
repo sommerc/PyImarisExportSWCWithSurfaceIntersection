@@ -158,7 +158,7 @@ def ExportSWC(aImarisId, in_pixel):
                 head = head + 1
             # write to file
 
-            fil_out = savename[:-4] + f"_filament_{k:03d}_{vFilamentIndex:02d}.swc"
+            fil_out = savename[:-4] + f"_filament_{k:03d}_id_{vFilamentIndex:02d}.swc"
             np.savetxt(fil_out, swc, "%d %d %f %f %f %f %d")
             print("Export to " + fil_out + " completed")
 
