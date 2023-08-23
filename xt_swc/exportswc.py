@@ -110,20 +110,21 @@ def ExportSWC(aImarisId, in_pixel):
 
     for k, vFilaments in enumerate(filemnt_objs):
         # go through Filaments and convert to SWC format
-        head = 0
-        swcs = np.zeros((0, 7))
 
         vCount = vFilaments.GetNumberOfFilaments()
         for vFilamentIndex in range(vCount):
+            head = 0
             vFilamentsXYZ = vFilaments.GetPositionsXYZ(vFilamentIndex)
             vFilamentsEdges = vFilaments.GetEdges(vFilamentIndex)
             vFilamentsRadius = vFilaments.GetRadii(vFilamentIndex)
             vFilamentsTypes = vFilaments.GetTypes(vFilamentIndex)
+
             # vFilamentsTime = vFilaments.GetTimeIndex(vFilamentIndex)
 
             N = len(vFilamentsXYZ)
             G = np.zeros((N, N), np.bool)
             visited = np.zeros(N, np.bool)
+
             for p1, p2 in vFilamentsEdges:
                 G[p1, p2] = True
                 G[p2, p1] = True
@@ -155,11 +156,11 @@ def ExportSWC(aImarisId, in_pixel):
                         queue.append(idx)
                         prevs.append(head + 1)
                 head = head + 1
-            swcs = np.concatenate((swcs, swc), axis=0)
-        # write to file
-        fil_out = savename[:-4] + f"_filament{k:03d}.swc"
-        np.savetxt(fil_out, swcs, "%d %d %f %f %f %f %d")
-        print("Export to " + fil_out + " completed")
+            # write to file
+
+            fil_out = savename[:-4] + f"_filament_{k:03d}_{vFilamentIndex:02d}.swc"
+            np.savetxt(fil_out, swc, "%d %d %f %f %f %f %d")
+            print("Export to " + fil_out + " completed")
 
     tk.Tk().withdraw()
     messagebox.showinfo("Success", "SWCs have been successfully exported.")
